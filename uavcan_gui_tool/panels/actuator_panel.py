@@ -82,7 +82,12 @@ class PercentSlider(QWidget):
 class ActuatorPanel(QDialog):
     DEFAULT_INTERVAL = 0.1
 
-    #CMD_BIT_LENGTH = uavcan.get_uavcan_data_type(uavcan.equipment.actuator.ArrayCommand().cmd).value_type.bitlen
+    def node_status_callback(event):
+        print('NodeStatus message from node', event.transfer.source_node_id)
+        print('Node uptime:', event.message.uptime_sec, 'seconds')
+        # Messages, service requests, service responses, and entire events
+        # can be converted into YAML formatted data structure using to_yaml():
+        print(uavcan.to_yaml(event))
 
     def __init__(self, parent, node):
         super(ActuatorPanel, self).__init__(parent)
@@ -149,6 +154,13 @@ class ActuatorPanel(QDialog):
         
         self.setLayout(layout)
         self.resize(self.minimumWidth(), self.minimumHeight())
+        
+        # Subscribing to messages
+        #handle = self._node.add_handler(uavcan.equipment.actuator.Status, node_status_callback)
+        
+    
+    def closeEvent(self, evnt):
+        print('Closed')
 
 
     def _do_broadcast(self):
@@ -158,7 +170,11 @@ class ActuatorPanel(QDialog):
                 for sl in self._sliders:
                     raw_value = sl.get_value() / 100
                     #value = (-self.CMD_MIN if raw_value < 0 else self.CMD_MAX) * raw_value
-                    cmd = uavcan.equipment.actuator.Command(actuator_id=sl.get_id(), command_type=1, command_value=raw_value)
+                    #cmd = uavcan.equipment.actuator.Command(actuator_id=sl.get_id(), command_type=1, command_value=raw_value)
+                    cmd = uavcan.equipment.actuator.Command()
+                    cmd.actuator_id = sl.get_id()
+                    cmd.command_type = cmd.COMMAND_TYPE_POSITION 
+                    cmd.command_value = raw_value
                     msg.commands.append(cmd)
 
                 self._node.broadcast(msg)
