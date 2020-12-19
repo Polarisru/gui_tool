@@ -9,7 +9,7 @@
 import uavcan
 from functools import partial
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QWidget, QLabel, QDialog, QSlider, QSpinBox, QDoubleSpinBox, \
-    QPlainTextEdit
+    QPlainTextEdit, QLineEdit
 from PyQt5.QtCore import QTimer, Qt
 from logging import getLogger
 from ..widgets import make_icon_button, get_icon, get_monospace_font
@@ -41,53 +41,90 @@ class PercentSlider(QWidget):
         self._spinbox.setMaximum(170)
         self._spinbox.setValue(0)
         self._spinbox.valueChanged.connect(lambda: self._slider.setValue(self._spinbox.value()))
-        self._spinbox.setFixedWidth(80)
+        self._spinbox.setFixedWidth(50)
 
         self._idbox = QSpinBox(self)
-        self._idbox.setMinimum(1)
+        self._idbox.setMinimum(0)
         self._idbox.setMaximum(255)
         self._idbox.setValue(1)
         self._idbox.setFixedWidth(40)
 
-        self._zero_button = make_icon_button('hand-stop-o', 'Zero setpoint', self, on_clicked=self.zero)
-        self._zero_button.setFixedWidth(80)
+        self._zero_button = make_icon_button('hand-o-up', 'Go to Zero', self, on_clicked=self.zero)
+        self._zero_button.setFixedWidth(60)
+        self._min_button = make_icon_button('hand-o-left', 'Go to Min', self, on_clicked=self.do_min)
+        self._min_button.setFixedWidth(60)
+        self._max_button = make_icon_button('hand-o-right', 'Go to Max', self, on_clicked=self.do_max)
+        self._max_button.setFixedWidth(60)
+        
+        self._position = QLineEdit(self)
+        self._position.setReadOnly(True)
+        self._position.setAlignment(Qt.AlignCenter)
+        self._position.setText('--.-')
+        self._position.setFixedWidth(40)
 
         layout = QVBoxLayout(self)
         sub_layout = QHBoxLayout(self)
         sub_layout.addWidget(self._slider)
+        sub_layout.addWidget(self._spinbox)
         layout.addLayout(sub_layout)
         sub_layout = QHBoxLayout(self)
         sub_layout.addStretch()
         sub_layout.addWidget(QLabel('ID:', self))
         sub_layout.addWidget(self._idbox)
         sub_layout.addStretch()
-        sub_layout.addWidget(self._spinbox)
+        sub_layout.addWidget(self._min_button)
         sub_layout.addWidget(self._zero_button)
+        sub_layout.addWidget(self._max_button)
         sub_layout.addStretch()
+        sub_layout.addWidget(QLabel('Readout:', self))
+        sub_layout.addWidget(self._position)
         layout.addLayout(sub_layout)
         self.setLayout(layout)
 
         self.setMinimumHeight(80)
+        
+        self._active = False
 
     def zero(self):
         self._slider.setValue(0)
+        
+    def do_min(self):
+        self._slider.setValue(self._slider.minimum())
+
+    def do_max(self):
+        self._slider.setValue(self._slider.maximum())
 
     def get_value(self):
         return self._slider.value()
         
     def get_id(self):
         return self._idbox.value()
+        
+    def set_position(self, pos):
+        self._active = True
+        self._position.setText(pos)
+        
+    def set_active(self, value):
+        self._active = value
+    
+    def is_active(self):
+        return self._active
+        
+    def reset_position(self):
+        self._position.setText('--.-')
 
 
 class ActuatorPanel(QDialog):
     DEFAULT_INTERVAL = 0.1
+    ACTIVE_INTERVAL = 2.0
 
-    def node_status_callback(event):
-        print('NodeStatus message from node', event.transfer.source_node_id)
-        print('Node uptime:', event.message.uptime_sec, 'seconds')
+    def node_status_callback(self, event):
         # Messages, service requests, service responses, and entire events
         # can be converted into YAML formatted data structure using to_yaml():
-        print(uavcan.to_yaml(event))
+        #print('Message: ', uavcan.to_yaml(event))
+        for sl in self._sliders:
+            if sl.get_id() == event.message.actuator_id:
+                sl.set_position(str(round(event.message.position * 180, 1)))
 
     def __init__(self, parent, node):
         super(ActuatorPanel, self).__init__(parent)
@@ -113,7 +150,7 @@ class ActuatorPanel(QDialog):
         self._bcast_interval.valueChanged.connect(
             lambda: self._bcast_timer.setInterval(self._bcast_interval.value() * 1e3))
 
-        self._stop_all = make_icon_button('hand-stop-o', 'Zero all channels', self, text='Zero All',
+        self._stop_all = make_icon_button('hand-o-up', 'Zero all channels', self, text='Zero All',
                                           on_clicked=self._do_stop_all)
 
         self._pause = make_icon_button('pause', 'Pause publishing', self, checkable=True, text='Pause')
@@ -128,6 +165,10 @@ class ActuatorPanel(QDialog):
         self._bcast_timer = QTimer(self)
         self._bcast_timer.start(self.DEFAULT_INTERVAL * 1e3)
         self._bcast_timer.timeout.connect(self._do_broadcast)
+        
+        self._active_timer = QTimer(self)
+        self._active_timer.start(self.ACTIVE_INTERVAL * 1e3)
+        self._active_timer.timeout.connect(self._show_active)
 
         layout = QVBoxLayout(self)
 
@@ -156,12 +197,11 @@ class ActuatorPanel(QDialog):
         self.resize(self.minimumWidth(), self.minimumHeight())
         
         # Subscribing to messages
-        #handle = self._node.add_handler(uavcan.equipment.actuator.Status, node_status_callback)
-        
-    
-    def closeEvent(self, evnt):
-        print('Closed')
-
+        try:
+            self.handle = self._node.add_handler(uavcan.equipment.actuator.Status, self.node_status_callback)
+            #handle = self._node.add_handler(uavcan.protocol.NodeStatus, self.node_status_callback)
+        except Exception as e:
+            print('NODE ERROR: ', str(e))
 
     def _do_broadcast(self):
         try:
@@ -183,6 +223,12 @@ class ActuatorPanel(QDialog):
                 self._msg_viewer.setPlainText('Paused')
         except Exception as ex:
             self._msg_viewer.setPlainText('Publishing failed:\n' + str(ex))
+            
+    def _show_active(self):
+        for sl in self._sliders:
+            if not sl.is_active():
+                sl.reset_position()
+            sl.set_active(False)
 
     def _do_stop_all(self):
         for sl in self._sliders:
@@ -217,6 +263,7 @@ class ActuatorPanel(QDialog):
     def closeEvent(self, event):
         global _singleton
         _singleton = None
+        self.handle.remove()
         super(ActuatorPanel, self).closeEvent(event)
 
 
@@ -232,4 +279,4 @@ def spawn(parent, node):
     return _singleton
 
 
-get_icon = partial(get_icon, 'asterisk')
+get_icon = partial(get_icon, 'tachometer')
