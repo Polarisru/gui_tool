@@ -49,11 +49,11 @@ class PercentSlider(QWidget):
         self._idbox.setValue(1)
         self._idbox.setFixedWidth(40)
 
-        self._zero_button = make_icon_button('hand-o-up', 'Go to Zero', self, on_clicked=self.zero)
+        self._zero_button = make_icon_button('arrow-up', 'Go to Zero', self, on_clicked=self.zero)
         self._zero_button.setFixedWidth(60)
-        self._min_button = make_icon_button('hand-o-left', 'Go to Min', self, on_clicked=self.do_min)
+        self._min_button = make_icon_button('arrow-left', 'Go to Min', self, on_clicked=self.do_min)
         self._min_button.setFixedWidth(60)
-        self._max_button = make_icon_button('hand-o-right', 'Go to Max', self, on_clicked=self.do_max)
+        self._max_button = make_icon_button('arrow-right', 'Go to Max', self, on_clicked=self.do_max)
         self._max_button.setFixedWidth(60)
         
         self._position = QLineEdit(self)
@@ -150,7 +150,7 @@ class ActuatorPanel(QDialog):
         self._bcast_interval.valueChanged.connect(
             lambda: self._bcast_timer.setInterval(self._bcast_interval.value() * 1e3))
 
-        self._stop_all = make_icon_button('hand-o-up', 'Zero all channels', self, text='Zero All',
+        self._stop_all = make_icon_button('arrow-up', 'Zero all channels', self, text='Zero All',
                                           on_clicked=self._do_stop_all)
 
         self._pause = make_icon_button('pause', 'Pause publishing', self, checkable=True, text='Pause')
