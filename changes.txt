@@ -1,0 +1,2 @@
+1. Open C:\Users\Alex\AppData\Local\Programs\Python\Python38\Lib\site-packages\uavcan_gui_tool\thirdparty\pyqtgraph\ptime.py
+2. Replace .clock with .process_time
