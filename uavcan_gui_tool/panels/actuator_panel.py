@@ -124,7 +124,7 @@ class ActuatorPanel(QDialog):
         #print('Message: ', uavcan.to_yaml(event))
         for sl in self._sliders:
             if sl.get_id() == event.message.actuator_id:
-                sl.set_position(str(round(event.message.position * 180, 1)))
+                sl.set_position(str(round(event.message.position * 100, 1)))
 
     def __init__(self, parent, node):
         super(ActuatorPanel, self).__init__(parent)
@@ -132,6 +132,8 @@ class ActuatorPanel(QDialog):
         self.setAttribute(Qt.WA_DeleteOnClose)              # This is required to stop background timers!
 
         self._node = node
+        
+        self._paused = False
 
         self._sliders = [PercentSlider(self)]
 
@@ -151,9 +153,10 @@ class ActuatorPanel(QDialog):
             lambda: self._bcast_timer.setInterval(self._bcast_interval.value() * 1e3))
 
         self._stop_all = make_icon_button('arrow-up', 'Zero all channels', self, text='Zero All',
-                                          on_clicked=self._do_stop_all)
+                                          on_clicked=self._do_zero_all)
 
-        self._pause = make_icon_button('pause', 'Pause publishing', self, checkable=True, text='Pause')
+        self._pause = make_icon_button('pause', 'Pause publishing', self, text='Pause',
+                                       on_clicked=self._do_pause)
 
         self._msg_viewer = QPlainTextEdit(self)
         self._msg_viewer.setReadOnly(True)
@@ -196,16 +199,15 @@ class ActuatorPanel(QDialog):
         self.setLayout(layout)
         self.resize(self.minimumWidth(), self.minimumHeight())
         
-        # Subscribing to messages
+        # Subscribing to uavcan.equipment.actuator.Status messages
         try:
             self.handle = self._node.add_handler(uavcan.equipment.actuator.Status, self.node_status_callback)
-            #handle = self._node.add_handler(uavcan.protocol.NodeStatus, self.node_status_callback)
         except Exception as e:
             print('NODE ERROR: ', str(e))
 
     def _do_broadcast(self):
         try:
-            if not self._pause.isChecked():
+            if not self._paused:
                 msg = uavcan.equipment.actuator.ArrayCommand()
                 for sl in self._sliders:
                     raw_value = sl.get_value() / 100
@@ -230,7 +232,19 @@ class ActuatorPanel(QDialog):
                 sl.reset_position()
             sl.set_active(False)
 
-    def _do_stop_all(self):
+    def _do_pause(self):
+        if self._paused:
+            self._paused = False
+            self._pause.setText('Pause')
+            icon = get_icon('pause')
+            #self._pause.setIcon(icon)
+        else:
+            self._paused = True
+            self._pause.setText('Continue')
+            icon = get_icon('play')
+            #self._pause.setIcon(icon)
+
+    def _do_zero_all(self):
         for sl in self._sliders:
             sl.zero()
 
