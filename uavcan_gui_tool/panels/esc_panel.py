@@ -198,4 +198,4 @@ def spawn(parent, node):
     return _singleton
 
 
-get_icon = partial(get_icon, 'asterisk')
+get_panel_icon = partial(get_icon, 'asterisk')

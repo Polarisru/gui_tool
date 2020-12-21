@@ -21,7 +21,7 @@ class PanelDescriptor:
     def get_icon(self):
         # noinspection PyBroadException
         try:
-            return self._module.get_icon()
+            return self._module.get_panel_icon()
         except Exception:
             pass
 

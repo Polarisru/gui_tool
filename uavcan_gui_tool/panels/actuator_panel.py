@@ -236,13 +236,11 @@ class ActuatorPanel(QDialog):
         if self._paused:
             self._paused = False
             self._pause.setText('Pause')
-            icon = get_icon('pause')
-            #self._pause.setIcon(icon)
+            self._pause.setIcon(get_icon('pause'))
         else:
             self._paused = True
             self._pause.setText('Continue')
-            icon = get_icon('play')
-            #self._pause.setIcon(icon)
+            self._pause.setIcon(get_icon('play'))
 
     def _do_zero_all(self):
         for sl in self._sliders:
@@ -293,4 +291,4 @@ def spawn(parent, node):
     return _singleton
 
 
-get_icon = partial(get_icon, 'tachometer')
+get_panel_icon = partial(get_icon, 'tachometer')
