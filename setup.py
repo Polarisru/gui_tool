@@ -157,7 +157,8 @@ if ('bdist_msi' in sys.argv) or ('build_exe' in sys.argv):
     unpacked_eggs_dir = os.path.join('build', 'hatched_eggs')
     sys.path.insert(0, unpacked_eggs_dir)
     try:
-        shutil.rmtree(unpacked_eggs_dir)
+        #shutil.rmtree(unpacked_eggs_dir)
+        pass
     except Exception:
         pass
     for dep in dependency_eggs_to_unpack:
