@@ -11,6 +11,7 @@ from ..widgets import show_error
 # TODO: Load all inner modules automatically. This is not really easy because we have to support freezing.
 from . import esc_panel
 from . import actuator_panel
+from . import actuator_panel_volz
 
 
 class PanelDescriptor:
@@ -34,5 +35,6 @@ class PanelDescriptor:
 
 PANELS = sorted([
     PanelDescriptor(esc_panel),
-    PanelDescriptor(actuator_panel)
+    PanelDescriptor(actuator_panel),
+    PanelDescriptor(actuator_panel_volz)
 ], key=lambda x: x.name)
