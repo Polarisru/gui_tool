@@ -196,7 +196,7 @@ if ('bdist_msi' in sys.argv) or ('build_exe' in sys.argv):
                 # so we need to include the Pyuavcan package as data in order to work-around this problem.
                 # Despite the fact that Pyuavcan is included as data, we still need cx_Freeze to analyze its
                 # dependencies, so we don't exclude it explicitly.
-                os.path.join(unpacked_eggs_dir, 'uavcan'),
+                #os.path.join(unpacked_eggs_dir, 'uavcan'),
                 # Same thing goes with the main package - we want its directory structure untouched, so we include
                 # it as data, too.
                 PACKAGE_NAME,

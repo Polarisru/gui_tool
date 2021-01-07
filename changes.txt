@@ -1,2 +1,14 @@
 1. Open C:\Users\Alex\AppData\Local\Programs\Python\Python38\Lib\site-packages\uavcan_gui_tool\thirdparty\pyqtgraph\ptime.py
 2. Replace .clock with .process_time
+
+To run build with Windows do:
+* install signtool.exe:
+	https://stackoverflow.com/questions/31869552/how-to-install-signtool-exe-for-windows-10
+* generate SSL certificate at 
+	https://regery.com.ua/ru/security/ssl-tools/self-signed-certificate-generator
+* convert SSL certificate to pfx key at 
+	https://www.sslshopper.com/ssl-converter.html
+* downgrade cx_Freeze to 6.1:
+	pip install cx_Freeze==6.1
+* run command from main qui_tool directory:
+	python setup.py build_exe
