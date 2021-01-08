@@ -75,7 +75,7 @@ class PercentSlider(QWidget):
         self._temperature = QLineEdit(self)
         self._temperature.setReadOnly(True)
         self._temperature.setAlignment(Qt.AlignCenter)
-        self._temperature.setText('--.-')
+        self._temperature.setText('--')
         self._temperature.setFixedWidth(40)
         self._pwm = QLineEdit(self)
         self._pwm.setReadOnly(True)
@@ -146,7 +146,21 @@ class PercentSlider(QWidget):
         
     def reset_position(self):
         self._position.setText('--.-')
+        
+    def set_current(self, value):
+        current = str(round(value * 0.025, 2))
+        self._current.setText(current)
 
+    def set_voltage(self, value):
+        voltage = str(round(value * 0.2, 1))
+        self._voltage.setText(voltage)
+        
+    def set_temperature(self, value):
+        if value == 0xff:
+            temperature = 'XX'
+        else:
+            temperature = str(value - 50)
+        self._voltage.setText(temperature)
 
 class ActuatorPanelVolz(QDialog):
     DEFAULT_FREQUENCY = 50
@@ -159,6 +173,13 @@ class ActuatorPanelVolz(QDialog):
         for sl in self._sliders:
             if sl.get_id() == event.message.actuator_id:
                 sl.set_position(str(round(event.message.position * 100, 1)))
+                
+    def vols_status_callback(self, event):
+        for sl in self._sliders:
+            if sl.get_id() == event.transfer.source_node_id:
+                sl.set_current(event.message.current)
+                sl.set_voltage(event.message.voltage)
+                sl.set_temperature(event.message.temperature)
 
     def __init__(self, parent, node):
         super(ActuatorPanelVolz, self).__init__(parent)
@@ -236,6 +257,11 @@ class ActuatorPanelVolz(QDialog):
         # Subscribing to uavcan.equipment.actuator.Status messages
         try:
             self.handle = self._node.add_handler(uavcan.equipment.actuator.Status, self.node_status_callback)
+        except Exception as e:
+            print('NODE ERROR: ', str(e))
+        # Subscribing to volz.ActuatorStatus messages
+        try:
+            self.handle = self._node.add_handler(uavcan.thirdparty.volz.ActuatorStatus, self.volz_status_callback)
         except Exception as e:
             print('NODE ERROR: ', str(e))
 
