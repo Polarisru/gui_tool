@@ -25,6 +25,8 @@ STANDARD_BAUD_RATES = 9600, 115200, 460800, 921600, 1000000, 3000000
 DEFAULT_BAUD_RATE = 115200
 assert DEFAULT_BAUD_RATE in STANDARD_BAUD_RATES
 
+STANDARD_CAN_BITRATES = {'1MBit': 1000000, '500kbit': 500000, '250kbit': 250000, '125kbit': 125000}
+DEFAULT_CAN_BITRATE = '1MBit'
 
 RUNNING_ON_LINUX = 'linux' in sys.platform.lower()
 
@@ -175,10 +177,17 @@ def run_setup_window(icon, dsdl_path=None):
     combo_completer.setModel(combo.model())
     combo.setCompleter(combo_completer)
 
-    bitrate = QSpinBox(win)
+    '''bitrate = QSpinBox(win)
     bitrate.setMaximum(1000000)
     bitrate.setMinimum(10000)
-    bitrate.setValue(1000000)
+    bitrate.setValue(1000000)'''
+    bitrate = QComboBox(win)
+    bitrate.setEditable(False)
+    bitrate.setInsertPolicy(QComboBox.NoInsert)
+    bitrate.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+    bitrate.setFont(get_monospace_font())
+    bitrate.insertItems(0, STANDARD_CAN_BITRATES.keys())
+    bitrate.setCurrentText(DEFAULT_CAN_BITRATE)
 
     baudrate = QComboBox(win)
     baudrate.setEditable(True)
@@ -254,7 +263,8 @@ def run_setup_window(icon, dsdl_path=None):
                        parent=win)
             return
         kwargs['baudrate'] = baud_rate_value
-        kwargs['bitrate'] = int(bitrate.value())
+        #kwargs['bitrate'] = int(bitrate.value())
+        kwargs['bitrate'] = STANDARD_CAN_BITRATES[bitrate.currentText()]
         result_key = str(combo.currentText()).strip()
         if not result_key:
             show_error('Invalid parameters', 'Interface name cannot be empty', 'Please select a valid interface',

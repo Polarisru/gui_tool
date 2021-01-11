@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QWidget, QLabel, QDialog, 
 from PyQt5.QtCore import QTimer, Qt
 from logging import getLogger
 from ..widgets import make_icon_button, get_icon, get_monospace_font
+import datetime
 
 __all__ = 'PANEL_NAME', 'spawn', 'get_icon'
 
@@ -25,8 +26,17 @@ _singleton = None
 
 
 class PercentSlider(QWidget):
+    def volz_response_callback(self, event):
+        if self.get_id() == event.transfer.source_node_id - 50:
+            self._cpu_temperature.setText(str(event.response.cpu_temperature - 50))
+            self._stalls.setText(str(event.response.stall_counter))
+            self._max_current.setText(str(round(event.response.max_current * 0.025, 2)))
+            self._power_on_time.setText(str(datetime.timedelta(seconds=event.response.total_power_on_time)))
+
     def __init__(self, parent):
         super(PercentSlider, self).__init__(parent)
+        
+        self._parent = parent
 
         self._slider = QSlider(Qt.Horizontal, self)
         self._slider.setMinimum(-170)
@@ -82,14 +92,36 @@ class PercentSlider(QWidget):
         self._pwm.setAlignment(Qt.AlignCenter)
         self._pwm.setText('---')
         self._pwm.setFixedWidth(40)        
-
+        
+        self._cpu_temperature = QLineEdit(self)
+        self._cpu_temperature.setReadOnly(True)
+        self._cpu_temperature.setAlignment(Qt.AlignCenter)
+        self._cpu_temperature.setText('--')
+        self._cpu_temperature.setFixedWidth(40)
+        self._stalls = QLineEdit(self)
+        self._stalls.setReadOnly(True)
+        self._stalls.setAlignment(Qt.AlignCenter)
+        self._stalls.setText('---')
+        self._stalls.setFixedWidth(40)        
+        self._max_current = QLineEdit(self)
+        self._max_current.setReadOnly(True)
+        self._max_current.setAlignment(Qt.AlignCenter)
+        self._max_current.setText('-.--')
+        self._max_current.setFixedWidth(40)
+        self._power_on_time = QLineEdit(self)
+        self._power_on_time.setReadOnly(True)
+        self._power_on_time.setAlignment(Qt.AlignCenter)
+        self._power_on_time.setText('---:--:--')
+        self._power_on_time.setFixedWidth(60)
+        self._info_button = make_icon_button('info', 'Get Info', self, on_clicked=self.send_info_request)
+        self._info_button.setFixedWidth(60)
+        
         layout = QVBoxLayout(self)
         sub_layout = QHBoxLayout(self)
         sub_layout.addWidget(self._slider)
         sub_layout.addWidget(self._spinbox)
         layout.addLayout(sub_layout)
         sub_layout = QHBoxLayout(self)
-        sub_layout.addStretch()
         sub_layout.addWidget(QLabel('ID:', self))
         sub_layout.addWidget(self._idbox)
         sub_layout.addStretch()
@@ -113,9 +145,22 @@ class PercentSlider(QWidget):
         sub_layout.addWidget(QLabel('PWM:', self))
         sub_layout.addWidget(self._pwm)        
         layout.addLayout(sub_layout)
+        sub_layout = QHBoxLayout(self)
+        sub_layout.addWidget(QLabel('CPU Temp.:', self))
+        sub_layout.addWidget(self._cpu_temperature)
+        sub_layout.addWidget(QLabel('°C', self))
+        sub_layout.addWidget(QLabel('Stalls:', self))
+        sub_layout.addWidget(self._stalls)
+        sub_layout.addWidget(QLabel('Max Current:', self))
+        sub_layout.addWidget(self._max_current)
+        sub_layout.addWidget(QLabel('A', self))
+        sub_layout.addWidget(QLabel('Power-On:', self))
+        sub_layout.addWidget(self._power_on_time)
+        sub_layout.addWidget(self._info_button)
+        layout.addLayout(sub_layout)
         self.setLayout(layout)
 
-        self.setMinimumHeight(90)
+        self.setMinimumHeight(120)
         
         self._active = False
 
@@ -160,26 +205,34 @@ class PercentSlider(QWidget):
             temperature = 'XX'
         else:
             temperature = str(value - 50)
-        self._voltage.setText(temperature)
+        self._temperature.setText(temperature)
+
+    def set_pwm(self, value):
+        pwm = str(value)
+        self._pwm.setText(pwm)
+        
+    def reset_values(self):
+        self._current.setText('-.--')
+        self._voltage.setText('--.-')
+        self._temperature.setText('--')
+        self._pwm.setText('---')
+        self._position.setText('--.-')
+        
+    def send_info_request(self):
+        self._parent._node.request(uavcan.thirdparty.com.volz.GetActuatorInfo.Request(), self.get_id() + 50, self.volz_response_callback)
 
 class ActuatorPanelVolz(QDialog):
     DEFAULT_FREQUENCY = 50
     ACTIVE_INTERVAL = 2.0
-
-    def node_status_callback(self, event):
-        # Messages, service requests, service responses, and entire events
-        # can be converted into YAML formatted data structure using to_yaml():
-        #print('Message: ', uavcan.to_yaml(event))
-        for sl in self._sliders:
-            if sl.get_id() == event.message.actuator_id:
-                sl.set_position(str(round(event.message.position * 100, 1)))
                 
-    def vols_status_callback(self, event):
+    def volz_status_callback(self, event):
         for sl in self._sliders:
-            if sl.get_id() == event.transfer.source_node_id:
+            if sl.get_id() == event.transfer.source_node_id - 50:
                 sl.set_current(event.message.current)
                 sl.set_voltage(event.message.voltage)
-                sl.set_temperature(event.message.temperature)
+                sl.set_temperature(event.message.motor_temperature)
+                sl.set_pwm(event.message.motor_pwm)
+                sl.set_position(str(round(event.message.actual_position, 1)))
 
     def __init__(self, parent, node):
         super(ActuatorPanelVolz, self).__init__(parent)
@@ -254,14 +307,9 @@ class ActuatorPanelVolz(QDialog):
         self.setLayout(layout)
         self.resize(self.minimumWidth(), self.minimumHeight())
         
-        # Subscribing to uavcan.equipment.actuator.Status messages
-        try:
-            self.handle = self._node.add_handler(uavcan.equipment.actuator.Status, self.node_status_callback)
-        except Exception as e:
-            print('NODE ERROR: ', str(e))
         # Subscribing to volz.ActuatorStatus messages
         try:
-            self.handle = self._node.add_handler(uavcan.thirdparty.volz.ActuatorStatus, self.volz_status_callback)
+            self.handle = self._node.add_handler(uavcan.thirdparty.com.volz.ActuatorStatus, self.volz_status_callback)
         except Exception as e:
             print('NODE ERROR: ', str(e))
 
@@ -289,7 +337,7 @@ class ActuatorPanelVolz(QDialog):
     def _show_active(self):
         for sl in self._sliders:
             if not sl.is_active():
-                sl.reset_position()
+                sl.reset_values()
             sl.set_active(False)
 
     def _do_pause(self):
