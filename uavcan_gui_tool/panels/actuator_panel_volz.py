@@ -8,7 +8,7 @@
 
 import uavcan
 from functools import partial
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QWidget, QLabel, QDialog, QSlider, QSpinBox, QDoubleSpinBox, \
+from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QGridLayout, QWidget, QLabel, QDialog, QSlider, QSpinBox, \
     QPlainTextEdit, QLineEdit
 from PyQt5.QtCore import QTimer, Qt
 from logging import getLogger
@@ -244,10 +244,12 @@ class ActuatorPanelVolz(QDialog):
         self._paused = False
 
         self._sliders = [PercentSlider(self)]
+        
+        self._sliders_grid = [(i, j) for j in range(2) for i in range(4)]
 
         self._num_sliders = QSpinBox(self)
         self._num_sliders.setMinimum(1)
-        self._num_sliders.setMaximum(4)
+        self._num_sliders.setMaximum(8)
         self._num_sliders.setValue(1)
         self._num_sliders.valueChanged.connect(self._update_number_of_sliders)
 
@@ -283,9 +285,9 @@ class ActuatorPanelVolz(QDialog):
 
         layout = QVBoxLayout(self)
 
-        self._slider_layout = QVBoxLayout(self)
-        for sl in self._sliders:
-            self._slider_layout.addWidget(sl)
+        self._slider_layout = QGridLayout(self)#QVBoxLayout(self)
+        for i in range(len(self._sliders)):
+            self._slider_layout.addWidget(self._sliders[i], *self._sliders_grid[i])
         layout.addLayout(self._slider_layout)
 
         layout.addWidget(self._stop_all)
@@ -366,15 +368,13 @@ class ActuatorPanelVolz(QDialog):
 
         while len(self._sliders) < num_sliders:
             new = PercentSlider(self)
-            self._slider_layout.addWidget(new)
+            self._slider_layout.addWidget(new, *self._sliders_grid[num_sliders - 1])
             self._sliders.append(new)
 
         def deferred_resize():
-            self.resize(self.width(), self.minimumHeight())
+            self.resize(self.minimumWidth(), self.minimumHeight())
 
         deferred_resize()
-        # noinspection PyCallByClass,PyTypeChecker
-        #QTimer.singleShot(200, deferred_resize)
 
     def __del__(self):
         global _singleton
