@@ -31,7 +31,9 @@ class PercentSlider(QWidget):
             self._cpu_temperature.setText(str(event.response.cpu_temperature - 50))
             self._stalls.setText(str(event.response.stall_counter))
             self._max_current.setText(str(round(event.response.max_current * 0.025, 2)))
-            self._power_on_time.setText(str(datetime.timedelta(seconds=event.response.total_power_on_time)))
+            #self._power_on_time.setText(str(datetime.timedelta(seconds=event.response.total_power_on_time)))
+            seconds = event.response.total_power_on_time
+            self._power_on_time.setText('{}:{:02}:{:02}'.format(seconds // 3600, seconds % 3600 // 60, seconds % 60))
 
     def __init__(self, parent):
         super(PercentSlider, self).__init__(parent)
