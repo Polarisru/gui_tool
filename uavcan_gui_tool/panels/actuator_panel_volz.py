@@ -14,6 +14,7 @@ from PyQt5.QtCore import QTimer, Qt
 from logging import getLogger
 from ..widgets import make_icon_button, get_icon, get_monospace_font
 import datetime
+import math
 
 __all__ = 'PANEL_NAME', 'spawn', 'get_icon'
 
@@ -24,10 +25,12 @@ logger = getLogger(__name__)
 
 _singleton = None
 
+NODE_ID_OFFSET = 49
+
 
 class PercentSlider(QWidget):
     def volz_response_callback(self, event):
-        if self.get_id() == event.transfer.source_node_id - 50:
+        if self.get_id() == event.transfer.source_node_id - NODE_ID_OFFSET:
             self._cpu_temperature.setText(str(event.response.cpu_temperature - 50))
             self._stalls.setText(str(event.response.stall_counter))
             self._max_current.setText(str(round(event.response.max_current * 0.025, 2)))
@@ -221,7 +224,7 @@ class PercentSlider(QWidget):
         self._position.setText('--.-')
         
     def send_info_request(self):
-        self._parent._node.request(uavcan.thirdparty.com.volz.GetActuatorInfo.Request(), self.get_id() + 50, self.volz_response_callback)
+        self._parent._node.request(uavcan.thirdparty.com.volz.GetActuatorInfo.Request(), self.get_id() + NODE_ID_OFFSET, self.volz_response_callback)
 
 class ActuatorPanelVolz(QDialog):
     DEFAULT_FREQUENCY = 50
@@ -229,12 +232,13 @@ class ActuatorPanelVolz(QDialog):
                 
     def volz_status_callback(self, event):
         for sl in self._sliders:
-            if sl.get_id() == event.transfer.source_node_id - 50:
+            #if sl.get_id() == event.transfer.source_node_id - NODE_ID_OFFSET:
+            if event.message.actuator_id == sl.get_id():
                 sl.set_current(event.message.current)
                 sl.set_voltage(event.message.voltage)
                 sl.set_temperature(event.message.motor_temperature)
                 sl.set_pwm(event.message.motor_pwm)
-                sl.set_position(str(round(event.message.actual_position, 1)))
+                sl.set_position(str(round(math.degrees(event.message.actual_position), 1)))
 
     def __init__(self, parent, node):
         super(ActuatorPanelVolz, self).__init__(parent)
