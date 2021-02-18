@@ -9,7 +9,7 @@
 import uavcan
 from functools import partial
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QGridLayout, QWidget, QLabel, QDialog, QSlider, QSpinBox, \
-    QPlainTextEdit, QLineEdit
+    QPlainTextEdit, QLineEdit, QCheckBox
 from PyQt5.QtCore import QTimer, Qt
 from logging import getLogger
 from ..widgets import make_icon_button, get_icon, get_monospace_font
@@ -26,14 +26,17 @@ logger = getLogger(__name__)
 _singleton = None
 
 NODE_ID_OFFSET = 49
+CURRENT_UNIT = 0.02
+VOLTAGE_UNIT = 0.2
+TEMPERATURE_OFFSET = 50
 
 
 class PercentSlider(QWidget):
     def volz_response_callback(self, event):
         if self.get_id() == event.transfer.source_node_id - NODE_ID_OFFSET:
-            self._cpu_temperature.setText(str(event.response.cpu_temperature - 50))
+            self._cpu_temperature.setText(str(event.response.cpu_temperature - TEMPERATURE_OFFSET))
             self._stalls.setText(str(event.response.stall_counter))
-            self._max_current.setText(str(round(event.response.max_current * 0.025, 2)))
+            self._max_current.setText(str(round(event.response.max_current * CURRENT_UNIT, 2)))
             #self._power_on_time.setText(str(datetime.timedelta(seconds=event.response.total_power_on_time)))
             seconds = event.response.total_power_on_time
             self._power_on_time.setText('{}:{:02}:{:02}'.format(seconds // 3600, seconds % 3600 // 60, seconds % 60))
@@ -168,6 +171,22 @@ class PercentSlider(QWidget):
         self.setMinimumHeight(120)
         
         self._active = False
+        
+    def enable(self):
+        self._slider.setEnabled(True)
+        self._spinbox.setEnabled(True)
+        self._idbox.setEnabled(True)
+        self._zero_button.setEnabled(True)
+        self._min_button.setEnabled(True)
+        self._max_button.setEnabled(True)
+    
+    def disable(self):
+        self._slider.setEnabled(False)
+        self._spinbox.setEnabled(False)
+        self._idbox.setEnabled(False)
+        self._zero_button.setEnabled(False)
+        self._min_button.setEnabled(False)
+        self._max_button.setEnabled(False)
 
     def zero(self):
         self._slider.setValue(0)
@@ -198,18 +217,18 @@ class PercentSlider(QWidget):
         self._position.setText('--.-')
         
     def set_current(self, value):
-        current = str(round(value * 0.025, 2))
+        current = str(round(value * CURRENT_UNIT, 2))
         self._current.setText(current)
 
     def set_voltage(self, value):
-        voltage = str(round(value * 0.2, 1))
+        voltage = str(round(value * VOLTAGE_UNIT, 1))
         self._voltage.setText(voltage)
         
     def set_temperature(self, value):
-        if value == 0xff:
+        if value == 0:
             temperature = 'XX'
         else:
-            temperature = str(value - 50)
+            temperature = str(value - TEMPERATURE_OFFSET)
         self._temperature.setText(temperature)
 
     def set_pwm(self, value):
@@ -229,6 +248,7 @@ class PercentSlider(QWidget):
 class ActuatorPanelVolz(QDialog):
     DEFAULT_FREQUENCY = 50
     ACTIVE_INTERVAL = 2.0
+    MOVEMENT_INTERVAL = 2.0
                 
     def volz_status_callback(self, event):
         for sl in self._sliders:
@@ -252,6 +272,8 @@ class ActuatorPanelVolz(QDialog):
         self._sliders = [PercentSlider(self)]
         
         self._sliders_grid = [(i, j) for j in range(2) for i in range(4)]
+        
+        self._current_pos = 0
 
         self._num_sliders = QSpinBox(self)
         self._num_sliders.setMinimum(1)
@@ -270,9 +292,17 @@ class ActuatorPanelVolz(QDialog):
 
         self._stop_all = make_icon_button('arrow-up', 'Zero all channels', self, text='Zero All',
                                           on_clicked=self._do_zero_all)
+        self._min_all = make_icon_button('arrow-left', 'Go to Min', self, text='Go to Min',
+                                          on_clicked=self._do_min_all)
+        self._max_all = make_icon_button('arrow-right', 'Go to Max', self, text='Go to Max',
+                                          on_clicked=self._do_max_all)
 
         self._pause = make_icon_button('pause', 'Pause publishing', self, text='Pause',
                                        on_clicked=self._do_pause)
+                                       
+        self._cb_move = QCheckBox(self)
+        self._cb_move.setText('Do movement')
+        self._cb_move.stateChanged.connect(self._update_movement)
 
         self._msg_viewer = QPlainTextEdit(self)
         self._msg_viewer.setReadOnly(True)
@@ -288,15 +318,18 @@ class ActuatorPanelVolz(QDialog):
         self._active_timer = QTimer(self)
         self._active_timer.start(self.ACTIVE_INTERVAL * 1e3)
         self._active_timer.timeout.connect(self._show_active)
+        
+        self._movement_timer = QTimer(self)
+        self._movement_timer.setInterval(self.MOVEMENT_INTERVAL * 1e3)
+        self._movement_timer.timeout.connect(self._do_movement)
 
         layout = QVBoxLayout(self)
 
-        self._slider_layout = QGridLayout(self)#QVBoxLayout(self)
-        for i in range(len(self._sliders)):
-            self._slider_layout.addWidget(self._sliders[i], *self._sliders_grid[i])
-        layout.addLayout(self._slider_layout)
-
-        layout.addWidget(self._stop_all)
+        alls_layout = QHBoxLayout(self)
+        alls_layout.addWidget(self._min_all)
+        alls_layout.addWidget(self._stop_all)
+        alls_layout.addWidget(self._max_all)
+        layout.addLayout(alls_layout)
 
         controls_layout = QHBoxLayout(self)
         controls_layout.addWidget(QLabel('Channels:', self))
@@ -305,8 +338,15 @@ class ActuatorPanelVolz(QDialog):
         controls_layout.addWidget(self._bcast_interval)
         controls_layout.addWidget(QLabel('Hz', self))
         controls_layout.addStretch()
+        controls_layout.addWidget(self._cb_move)
+        controls_layout.addStretch()
         controls_layout.addWidget(self._pause)
         layout.addLayout(controls_layout)
+
+        self._slider_layout = QGridLayout(self)#QVBoxLayout(self)
+        for i in range(len(self._sliders)):
+            self._slider_layout.addWidget(self._sliders[i], *self._sliders_grid[i])
+        layout.addLayout(self._slider_layout)
 
         layout.addWidget(QLabel('Generated message:', self))
         layout.addWidget(self._msg_viewer)
@@ -326,7 +366,7 @@ class ActuatorPanelVolz(QDialog):
             if not self._paused:
                 msg = uavcan.equipment.actuator.ArrayCommand()
                 for sl in self._sliders:
-                    raw_value = sl.get_value() / 100
+                    raw_value = math.radians(sl.get_value())
                     #value = (-self.CMD_MIN if raw_value < 0 else self.CMD_MAX) * raw_value
                     #cmd = uavcan.equipment.actuator.Command(actuator_id=sl.get_id(), command_type=1, command_value=raw_value)
                     cmd = uavcan.equipment.actuator.Command()
@@ -341,6 +381,34 @@ class ActuatorPanelVolz(QDialog):
                 self._msg_viewer.setPlainText('Paused')
         except Exception as ex:
             self._msg_viewer.setPlainText('Publishing failed:\n' + str(ex))
+            
+    def _update_movement(self):
+        if self._cb_move.isChecked():
+            self._stop_all.setEnabled(False)
+            self._min_all.setEnabled(False)
+            self._max_all.setEnabled(False)
+            self._num_sliders.setEnabled(False)
+            for sl in self._sliders:
+                sl.disable()
+            self._movement_timer.start()
+        else:
+            self._stop_all.setEnabled(True)
+            self._min_all.setEnabled(True)
+            self._max_all.setEnabled(True)
+            self._num_sliders.setEnabled(True)
+            for sl in self._sliders:
+                sl.enable()            
+            self._movement_timer.stop()
+            
+    def _do_movement(self):
+        if self._current_pos == 0:
+            # move to max
+            self._current_pos = 1
+            self._do_max_all()
+        else:
+            # move to min
+            self._current_pos = 0
+            self._do_min_all()
             
     def _show_active(self):
         for sl in self._sliders:
@@ -361,6 +429,14 @@ class ActuatorPanelVolz(QDialog):
     def _do_zero_all(self):
         for sl in self._sliders:
             sl.zero()
+            
+    def _do_min_all(self):
+        for sl in self._sliders:
+            sl.do_min()
+    
+    def _do_max_all(self):
+        for sl in self._sliders:
+            sl.do_max()            
 
     def _update_number_of_sliders(self):
         num_sliders = self._num_sliders.value()
