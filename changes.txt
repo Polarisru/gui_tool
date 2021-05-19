@@ -12,3 +12,6 @@ To run build with Windows do:
 	pip install cx_Freeze==6.1
 * run command from main qui_tool directory:
 	python setup.py build_exe
+	
+If any problems with wrong pyqtgraph submodule, just enter:
+	git submodule update --force --recursive --init --remote
